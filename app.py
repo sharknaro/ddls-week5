@@ -1,0 +1,189 @@
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import scanpy as sc
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import HTMLResponse
+
+DATA_PATH = Path(__file__).parent / "data" / "pbmc3k.h5ad"
+STATE: dict[str, Any] = {}
+
+
+def _as_float(value: Any) -> float:
+    return float(value) if np.isfinite(value) else 0.0
+
+
+def _matrix_column(adata, gene: str) -> np.ndarray:
+    if gene not in adata.var_names:
+        raise HTTPException(status_code=404, detail=f"Unknown gene: {gene}")
+    values = adata[:, gene].X
+    if hasattr(values, "toarray"):
+        values = values.toarray()
+    return np.asarray(values).ravel()
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    if not DATA_PATH.exists():
+        raise RuntimeError(f"H5AD file not found: {DATA_PATH}")
+    adata = sc.read_h5ad(DATA_PATH)
+    if "X_umap" not in adata.obsm:
+        raise RuntimeError("The H5AD file does not contain obsm['X_umap']")
+    STATE["adata"] = adata
+    yield
+    STATE.clear()
+
+
+app = FastAPI(title="PBMC Single-Cell Explorer", lifespan=lifespan)
+
+
+@app.get("/", response_class=HTMLResponse)
+async def index() -> str:
+    return HTML_PAGE
+
+
+@app.get("/api/umap")
+async def umap() -> dict[str, Any]:
+    adata = STATE["adata"]
+    coords = np.asarray(adata.obsm["X_umap"])
+    clusters = adata.obs["leiden"].astype(str).to_numpy()
+    return {
+        "cells": [
+            {
+                "cell_id": str(cell_id),
+                "x": _as_float(point[0]),
+                "y": _as_float(point[1]),
+                "cluster": cluster,
+                "n_genes": int(n_genes),
+                "pct_mito": _as_float(pct_mito),
+            }
+            for cell_id, point, cluster, n_genes, pct_mito in zip(
+                adata.obs_names,
+                coords,
+                clusters,
+                adata.obs["n_genes"],
+                adata.obs["pct_mito"],
+            )
+        ]
+    }
+
+
+@app.get("/api/genes/{gene}")
+async def gene_expression(gene: str) -> dict[str, Any]:
+    adata = STATE["adata"]
+    values = _matrix_column(adata, gene)
+    return {
+        "gene": gene,
+        "layer": "adata.X (log-normalized expression)",
+        "values": [
+            {"cell_id": str(cell_id), "cluster": str(cluster), "expression": _as_float(value)}
+            for cell_id, cluster, value in zip(adata.obs_names, adata.obs["leiden"], values)
+        ],
+    }
+
+
+@app.get("/api/clusters/{cluster}/markers")
+async def cluster_markers(
+    cluster: str,
+    n_genes: int = Query(default=15, ge=1, le=100),
+) -> dict[str, Any]:
+    adata = STATE["adata"]
+    if cluster not in adata.obs["leiden"].astype(str).unique():
+        raise HTTPException(status_code=404, detail=f"Unknown cluster: {cluster}")
+    sc.tl.rank_genes_groups(
+        adata, "leiden", groups=[cluster], reference="rest", method="wilcoxon",
+        n_genes=n_genes, use_raw=False, key_added="api_markers",
+    )
+    ranked = adata.uns["api_markers"]
+    names = ranked["names"][cluster]
+    markers = []
+    for i, name in enumerate(names):
+        markers.append({
+            "gene": str(name),
+            "score": _as_float(ranked["scores"][cluster][i]),
+            "logfoldchange": _as_float(ranked["logfoldchanges"][cluster][i]),
+            "pval_adj": _as_float(ranked["pvals_adj"][cluster][i]),
+        })
+    cells = adata.obs["leiden"].astype(str) == cluster
+    return {
+        "cluster": cluster,
+        "n_cells": int(cells.sum()),
+        "quality": {
+            "n_genes_median": _as_float(adata.obs.loc[cells, "n_genes"].median()),
+            "n_genes_range": [int(adata.obs.loc[cells, "n_genes"].min()), int(adata.obs.loc[cells, "n_genes"].max())],
+            "pct_mito_median": _as_float(adata.obs.loc[cells, "pct_mito"].median()),
+            "pct_mito_range": [_as_float(adata.obs.loc[cells, "pct_mito"].min()), _as_float(adata.obs.loc[cells, "pct_mito"].max())],
+        },
+        "markers": markers,
+    }
+
+
+HTML_PAGE = r'''<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PBMC Single-Cell Explorer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100">
+  <main class="mx-auto max-w-7xl p-4 sm:p-6">
+    <header class="mb-5">
+      <p class="text-sm font-semibold uppercase tracking-widest text-cyan-400">PBMC single-cell explorer</p>
+      <h1 class="mt-1 text-3xl font-bold tracking-tight">UMAP and cluster markers</h1>
+      <p class="mt-2 max-w-3xl text-slate-400">Explore 2,700 cells from <code>pbmc3k.h5ad</code>. Expression values use log-normalized <code>adata.X</code>.</p>
+    </header>
+    <section class="grid gap-4 lg:grid-cols-[18rem_1fr]">
+      <aside class="rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-xl">
+        <div class="space-y-4">
+          <label class="block"><span class="text-sm text-slate-300">Color by</span>
+            <select id="colorBy" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"><option value="cluster">Cluster</option><option value="n_genes">Genes detected</option><option value="pct_mito">Mitochondrial %</option></select>
+          </label>
+          <label class="block"><span class="text-sm text-slate-300">Gene expression</span>
+            <div class="mt-1 flex gap-2"><input id="gene" list="genes" placeholder="e.g. LST1" class="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 uppercase" /><button id="geneBtn" class="rounded-lg bg-cyan-500 px-3 py-2 font-semibold text-slate-950">Plot</button></div>
+            <datalist id="genes"></datalist>
+          </label>
+          <label class="block"><span class="text-sm text-slate-300">Cluster markers</span>
+            <select id="cluster" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"></select>
+          </label>
+          <div id="quality" class="rounded-lg bg-slate-800/70 p-3 text-sm text-slate-300">Select a cluster to see quality.</div>
+        </div>
+      </aside>
+      <section class="min-w-0 space-y-4">
+        <div id="plot" class="h-[62vh] min-h-[28rem] rounded-2xl border border-slate-800 bg-slate-900"></div>
+        <div class="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
+          <div class="border-b border-slate-800 px-4 py-3"><h2 class="font-semibold">Top markers</h2></div>
+          <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="bg-slate-800/70 text-slate-300"><tr><th class="px-4 py-2">Gene</th><th class="px-4 py-2">Score</th><th class="px-4 py-2">Log FC</th><th class="px-4 py-2">Adjusted p</th></tr></thead><tbody id="markers"></tbody></table></div>
+        </div>
+      </section>
+    </section>
+  </main>
+<script>
+const palette = ['#22d3ee','#a78bfa','#f472b6','#facc15','#4ade80','#fb923c','#60a5fa','#f87171'];
+let umapData;
+const $ = id => document.getElementById(id);
+async function load() {
+  const response = await fetch('/api/umap'); umapData = (await response.json()).cells;
+  const clusters = [...new Set(umapData.map(d => d.cluster))].sort((a,b) => +a - +b);
+  $('cluster').innerHTML = clusters.map(c => `<option>${c}</option>`).join('');
+  $('genes').innerHTML = ['LST1','FCER1G','FCGR3A','AIF1','CTSS','CD68','CST3','STMN1','PCNA','TYMS','KIAA0101'].map(g => `<option value="${g}"></option>`).join('');
+  $('colorBy').addEventListener('change', draw);
+  $('geneBtn').addEventListener('click', plotGene);
+  $('cluster').addEventListener('change', loadMarkers);
+  draw(); loadMarkers();
+}
+function draw() {
+  const mode = $('colorBy').value;
+  if (mode === 'cluster') {
+    const traces = [...new Set(umapData.map(d => d.cluster))].sort((a,b)=>+a-+b).map((c,i) => { const z=umapData.filter(d=>d.cluster===c); return {x:z.map(d=>d.x),y:z.map(d=>d.y),mode:'markers',type:'scattergl',name:`Cluster ${c}`,text:z.map(d=>`${d.cell_id}<br>n_genes: ${d.n_genes}<br>mito: ${d.pct_mito.toFixed(2)}%`),hoverinfo:'text',marker:{color:palette[i%palette.length],size:6,opacity:.8}}; }); Plotly.newPlot('plot',traces,layout('UMAP — clusters'),{responsive:true,displaylogo:false});
+  } else { const vals=umapData.map(d=>d[mode]); Plotly.newPlot('plot',[{x:umapData.map(d=>d.x),y:umapData.map(d=>d.y),mode:'markers',type:'scattergl',text:umapData.map(d=>d.cell_id),hoverinfo:'text',marker:{color:vals,colorscale:'Viridis',size:6,colorbar:{title:mode}}}],layout(`UMAP — ${mode}`),{responsive:true,displaylogo:false}); }
+}
+function layout(title) { return {title:{text:title,font:{color:'#e2e8f0'}},paper_bgcolor:'#0f172a',plot_bgcolor:'#0f172a',font:{color:'#94a3b8'},margin:{l:45,r:20,t:55,b:45},xaxis:{title:'UMAP 1',gridcolor:'#1e293b'},yaxis:{title:'UMAP 2',gridcolor:'#1e293b'}}; }
+async function plotGene() { const gene=$('gene').value.trim(); if(!gene)return; const r=await fetch(`/api/genes/${encodeURIComponent(gene)}`); if(!r.ok){alert('Gene not found');return;} const values=(await r.json()).values; const byId=new Map(values.map(d=>[d.cell_id,d.expression])); Plotly.newPlot('plot',[{x:umapData.map(d=>d.x),y:umapData.map(d=>d.y),mode:'markers',type:'scattergl',text:umapData.map(d=>d.cell_id),hoverinfo:'text',marker:{color:umapData.map(d=>byId.get(d.cell_id)),colorscale:'Viridis',size:6,colorbar:{title:gene}}}],layout(`UMAP — ${gene} expression`),{responsive:true,displaylogo:false}); }
+async function loadMarkers() { const c=$('cluster').value; if(c===undefined)return; const d=await (await fetch(`/api/clusters/${c}/markers?n_genes=15`)).json(); $('quality').innerHTML=`<b>Cluster ${c}</b><br>${d.n_cells} cells<br>n_genes median: ${d.quality.n_genes_median.toFixed(0)} [${d.quality.n_genes_range.join('–')}]<br>mito median: ${d.quality.pct_mito_median.toFixed(2)}% [${d.quality.pct_mito_range.map(x=>x.toFixed(2)).join('–')}%]`; $('markers').innerHTML=d.markers.map(m=>`<tr class="border-t border-slate-800"><td class="px-4 py-2 font-medium">${m.gene}</td><td class="px-4 py-2">${m.score.toFixed(2)}</td><td class="px-4 py-2">${m.logfoldchange.toFixed(2)}</td><td class="px-4 py-2">${m.pval_adj.toExponential(2)}</td></tr>`).join(''); }
+load();
+</script>
+</body></html>'''

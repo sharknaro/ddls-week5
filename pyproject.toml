@@ -1,0 +1,12 @@
+[project]
+name = "pbmc-single-cell-explorer"
+version = "0.1.0"
+description = "FastAPI and Plotly browser for a PBMC AnnData file"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115",
+  "scanpy>=1.10",
+  "uvicorn[standard]>=0.30",
+]
+
+[tool.uv]
