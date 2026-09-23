@@ -153,7 +153,8 @@ HTML_PAGE = r'''<!doctype html>
         </div>
       </aside>
       <section class="min-w-0 space-y-4">
-        <div id="plot" class="h-[62vh] min-h-[28rem] rounded-2xl border border-slate-800 bg-slate-900"></div>
+        <div id="status" role="status" aria-live="polite" class="hidden rounded-lg border px-3 py-2 text-sm"></div>
+        <div id="plot" class="h-[62vh] min-h-[28rem] rounded-2xl border border-slate-800 bg-slate-900"><div class="flex h-full items-center justify-center text-slate-400">Loading UMAP…</div></div>
         <div class="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
           <div class="border-b border-slate-800 px-4 py-3"><h2 class="font-semibold">Top markers</h2><p class="mt-1 text-xs text-slate-500">Wilcoxon ranking vs. all other cells; log FC and adjusted p-values.</p></div>
           <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="bg-slate-800/70 text-slate-300"><tr><th class="px-4 py-2">Gene</th><th class="px-4 py-2">Score</th><th class="px-4 py-2">Log FC</th><th class="px-4 py-2">Adjusted p</th></tr></thead><tbody id="markers"></tbody></table></div>
@@ -165,8 +166,13 @@ HTML_PAGE = r'''<!doctype html>
 const palette = ['#22d3ee','#a78bfa','#f472b6','#facc15','#4ade80','#fb923c','#60a5fa','#f87171'];
 let umapData;
 const $ = id => document.getElementById(id);
+function setStatus(message, kind = 'info') { const el = $('status'); if (!message) { el.className = 'hidden'; el.textContent = ''; return; } const styles = {info: 'border-cyan-800 bg-cyan-950/50 text-cyan-200', error: 'border-red-800 bg-red-950/50 text-red-200', success: 'border-emerald-800 bg-emerald-950/50 text-emerald-200'}; el.className = `rounded-lg border px-3 py-2 text-sm ${styles[kind] || styles.info}`; el.textContent = message; }
+function setBusy(button, busy, label) { button.disabled = busy; button.textContent = busy ? 'Loading…' : label; button.classList.toggle('opacity-60', busy); button.classList.toggle('cursor-not-allowed', busy); }
 async function load() {
-  const response = await fetch('/api/umap'); umapData = (await response.json()).cells;
+  setStatus('Loading UMAP and cluster data…');
+  try {
+    const response = await fetch('/api/umap'); if (!response.ok) throw new Error(`Data request failed (${response.status})`); umapData = (await response.json()).cells; if (!umapData.length) throw new Error('The dataset returned no cells.');
+  } catch (error) { $('plot').innerHTML = '<div class="flex h-full items-center justify-center p-6 text-center text-red-300">The dataset could not be loaded.</div>'; setStatus(`${error.message} Check that the app is running and the H5AD file is available.`, 'error'); return; }
   const clusters = [...new Set(umapData.map(d => d.cluster))].sort((a,b) => +a - +b);
   $('cluster').innerHTML = clusters.map(c => `<option>${c}</option>`).join('');
   $('genes').innerHTML = ['LST1','FCER1G','FCGR3A','AIF1','CTSS','CD68','CST3','STMN1','PCNA','TYMS','KIAA0101'].map(g => `<option value="${g}"></option>`).join('');
@@ -174,7 +180,7 @@ async function load() {
   $('geneBtn').addEventListener('click', plotGene);
   $('gene').addEventListener('keydown', event => { if (event.key === 'Enter') plotGene(); });
   $('cluster').addEventListener('change', loadMarkers);
-  draw(); loadMarkers(); plotGene();
+  draw(); await loadMarkers(); await plotGene(); setStatus('Ready. Hover over cells or choose another view.', 'success');
 }
 function draw() {
   const mode = $('colorBy').value;
@@ -183,8 +189,8 @@ function draw() {
   } else { const vals=umapData.map(d=>d[mode]); Plotly.newPlot('plot',[{x:umapData.map(d=>d.x),y:umapData.map(d=>d.y),mode:'markers',type:'scattergl',text:umapData.map(d=>`${d.cell_id}<br>${mode === 'n_genes' ? 'Detected genes' : 'Mitochondrial counts'}: ${mode === 'n_genes' ? d.n_genes : d.pct_mito.toFixed(2) + '%'}`),hoverinfo:'text',marker:{color:vals,colorscale:'Cividis',size:6,line:{color:'#0f172a',width:.2},colorbar:{title:mode === 'n_genes' ? 'Genes/cell' : 'Mitochondrial %',titlefont:{color:'#f8fafc'},tickfont:{color:'#cbd5e1'}}}}],layout(`UMAP — ${mode}`),{responsive:true,displaylogo:false}); }
 }
 function layout(title) { return {title:{text:title,font:{color:'#f8fafc',size:16}},paper_bgcolor:'#0f172a',plot_bgcolor:'#0f172a',font:{color:'#cbd5e1'},margin:{l:58,r:28,t:58,b:52},xaxis:{title:'UMAP 1 (arbitrary units)',gridcolor:'#334155',zerolinecolor:'#475569'},yaxis:{title:'UMAP 2 (arbitrary units)',gridcolor:'#334155',zerolinecolor:'#475569'}}; }
-async function plotGene() { const gene=$('gene').value.trim(); if(!gene)return; const r=await fetch(`/api/genes/${encodeURIComponent(gene)}`); if(!r.ok){alert('Gene not found');return;} const values=(await r.json()).values; const byId=new Map(values.map(d=>[d.cell_id,d.expression])); Plotly.newPlot('plot',[{x:umapData.map(d=>d.x),y:umapData.map(d=>d.y),mode:'markers',type:'scattergl',text:umapData.map(d=>`${d.cell_id}<br>${gene} (log-normalized): ${byId.get(d.cell_id).toFixed(3)}`),hoverinfo:'text',marker:{color:umapData.map(d=>byId.get(d.cell_id)),colorscale:'Cividis',size:6,line:{color:'#0f172a',width:.2},colorbar:{title:`${gene} (log-normalized)`,titlefont:{color:'#f8fafc'},tickfont:{color:'#cbd5e1'}}}}],layout(`UMAP — ${gene} expression`),{responsive:true,displaylogo:false}); }
-async function loadMarkers() { const c=$('cluster').value; if(c===undefined)return; const d=await (await fetch(`/api/clusters/${c}/markers?n_genes=15`)).json(); $('quality').innerHTML=`<b>Cluster ${c}</b><br>${d.n_cells} cells<br>n_genes median: ${d.quality.n_genes_median.toFixed(0)} [${d.quality.n_genes_range.join('–')}]<br>mito median: ${d.quality.pct_mito_median.toFixed(2)}% [${d.quality.pct_mito_range.map(x=>x.toFixed(2)).join('–')}%]`; $('markers').innerHTML=d.markers.map(m=>`<tr class="border-t border-slate-800"><td class="px-4 py-2 font-medium">${m.gene}</td><td class="px-4 py-2">${m.score.toFixed(2)}</td><td class="px-4 py-2">${m.logfoldchange.toFixed(2)}</td><td class="px-4 py-2">${m.pval_adj.toExponential(2)}</td></tr>`).join(''); }
+async function plotGene() { const gene=$('gene').value.trim().toUpperCase(); if(!gene){setStatus('Type a gene symbol before selecting Show gene.', 'error'); $('gene').focus(); return false;} const button=$('geneBtn'); setBusy(button, true, 'Show gene'); setStatus(`Loading ${gene} expression…`); try { const r=await fetch(`/api/genes/${encodeURIComponent(gene)}`); if(r.status===404) throw new Error(`${gene} was not found in this dataset. Try a gene symbol such as LST1 or MS4A1.`); if(!r.ok) throw new Error(`Expression request failed (${r.status}).`); const payload=await r.json(); if(!payload.values?.length) throw new Error(`No expression values were returned for ${gene}.`); const byId=new Map(payload.values.map(d=>[d.cell_id,d.expression])); Plotly.newPlot('plot',[{x:umapData.map(d=>d.x),y:umapData.map(d=>d.y),mode:'markers',type:'scattergl',text:umapData.map(d=>`${d.cell_id}<br>${gene} (log-normalized): ${byId.get(d.cell_id).toFixed(3)}`),hoverinfo:'text',marker:{color:umapData.map(d=>byId.get(d.cell_id)),colorscale:'Cividis',size:6,line:{color:'#0f172a',width:.2},colorbar:{title:`${gene} (log-normalized)`,titlefont:{color:'#f8fafc'},tickfont:{color:'#cbd5e1'}}}}],layout(`UMAP — ${gene} expression`),{responsive:true,displaylogo:false}); setStatus(`${gene} loaded. Values are log-normalized expression from adata.X.`, 'success'); return true; } catch(error) { setStatus(error.message, 'error'); return false; } finally { setBusy(button, false, 'Show gene'); } }
+async function loadMarkers() { const c=$('cluster').value; if(c===undefined)return; $('quality').innerHTML='Loading cluster quality and markers…'; try { const r=await fetch(`/api/clusters/${c}/markers?n_genes=15`); if(!r.ok) throw new Error(`Marker request failed (${r.status}).`); const d=await r.json(); $('quality').innerHTML=`<b>Cluster ${c}</b><br>${d.n_cells} cells<br>n_genes median: ${d.quality.n_genes_median.toFixed(0)} [${d.quality.n_genes_range.join('–')}]<br>mito median: ${d.quality.pct_mito_median.toFixed(2)}% [${d.quality.pct_mito_range.map(x=>x.toFixed(2)).join('–')}%]`; $('markers').innerHTML=d.markers.map(m=>`<tr class="border-t border-slate-800"><td class="px-4 py-2 font-medium">${m.gene}</td><td class="px-4 py-2">${m.score.toFixed(2)}</td><td class="px-4 py-2">${m.logfoldchange.toFixed(2)}</td><td class="px-4 py-2">${m.pval_adj.toExponential(2)}</td></tr>`).join(''); } catch(error) { $('quality').textContent=error.message; $('markers').innerHTML=''; setStatus(error.message, 'error'); } }
 load();
 </script>
 </body></html>'''
