@@ -174,6 +174,7 @@ HTML_PAGE = r'''<!doctype html>
           <label class="block"><span class="text-sm text-slate-300">Inspect cluster markers</span>
             <select id="cluster" aria-label="Cluster for marker table" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"></select>
           </label>
+          <div><span class="text-xs text-slate-500">Quick select</span><div class="mt-1 flex gap-2"><button type="button" data-cluster="4" class="cluster-quick rounded-lg border border-cyan-700 px-3 py-1.5 text-sm text-cyan-200 hover:bg-cyan-950">Cluster 4</button><button type="button" data-cluster="7" class="cluster-quick rounded-lg border border-cyan-700 px-3 py-1.5 text-sm text-cyan-200 hover:bg-cyan-950">Cluster 7</button></div></div>
           <div id="quality" class="rounded-lg bg-slate-800/70 p-3 text-sm text-slate-300">Choose a cluster to see its quality summary and markers.</div>
         </div>
       </aside>
@@ -213,6 +214,7 @@ async function load() {
   $('geneBtn').addEventListener('click', plotGene);
   $('gene').addEventListener('keydown', event => { if (event.key === 'Enter') plotGene(); });
   $('cluster').addEventListener('change', loadMarkers);
+  document.querySelectorAll('.cluster-quick').forEach(button => button.addEventListener('click', () => { $('cluster').value = button.dataset.cluster; loadMarkers(); }));
   draw(); await loadOverview(); await loadMarkers(); await plotGene(); setStatus('Ready. Hover over cells or choose another view.', 'success');
 }
 function applyLayout(mode) { const controls = $('controls'); controls.className = mode === 'toolbar' ? 'grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end' : 'space-y-4'; }
