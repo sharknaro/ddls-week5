@@ -134,17 +134,17 @@ HTML_PAGE = r'''<!doctype html>
     <header class="mb-5">
       <p class="text-sm font-semibold uppercase tracking-widest text-cyan-400">PBMC single-cell explorer</p>
       <h1 class="mt-1 text-3xl font-bold tracking-tight">UMAP and cluster markers</h1>
-      <p class="mt-2 max-w-3xl text-slate-400">Explore 2,700 cells from <code>pbmc3k.h5ad</code>. Expression values use log-normalized <code>adata.X</code>.</p>
+      <p class="mt-2 max-w-3xl text-slate-400">Explore 2,700 cells from <code>pbmc3k.h5ad</code>. Gene values are log-normalized expression from <code>adata.X</code>; detection is based on raw counts.</p>
     </header>
     <section class="grid gap-4 lg:grid-cols-[18rem_1fr]">
       <aside class="rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-xl">
         <div class="space-y-4">
-          <label class="block"><span class="text-sm text-slate-300">Color by</span>
-            <select id="colorBy" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"><option value="cluster">Cluster</option><option value="n_genes">Genes detected</option><option value="pct_mito">Mitochondrial %</option></select>
+          <label class="block"><span class="text-sm text-slate-300">Color points by</span>
+            <select id="colorBy" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"><option value="cluster">Leiden cluster (categorical)</option><option value="n_genes">Detected genes per cell</option><option value="pct_mito">Mitochondrial counts (%)</option></select>
           </label>
-          <label class="block"><span class="text-sm text-slate-300">Gene expression</span>
-            <div class="mt-1 flex gap-2"><input id="gene" list="genes" placeholder="e.g. LST1" class="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 uppercase" /><button id="geneBtn" class="rounded-lg bg-cyan-500 px-3 py-2 font-semibold text-slate-950">Plot</button></div>
-            <datalist id="genes"></datalist>
+          <label class="block"><span class="text-sm text-slate-300">Gene expression (log-normalized)</span>
+            <div class="mt-1 flex gap-2"><input id="gene" list="genes" placeholder="e.g. LST1" aria-label="Gene symbol" class="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 uppercase" /><button id="geneBtn" class="rounded-lg bg-cyan-500 px-3 py-2 font-semibold text-slate-950">Plot</button></div>
+            <p class="mt-1 text-xs text-slate-500">Values are from <code>adata.X</code>, not raw UMI counts.</p><datalist id="genes"></datalist>
           </label>
           <label class="block"><span class="text-sm text-slate-300">Cluster markers</span>
             <select id="cluster" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"></select>
@@ -155,7 +155,7 @@ HTML_PAGE = r'''<!doctype html>
       <section class="min-w-0 space-y-4">
         <div id="plot" class="h-[62vh] min-h-[28rem] rounded-2xl border border-slate-800 bg-slate-900"></div>
         <div class="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
-          <div class="border-b border-slate-800 px-4 py-3"><h2 class="font-semibold">Top markers</h2></div>
+          <div class="border-b border-slate-800 px-4 py-3"><h2 class="font-semibold">Top markers</h2><p class="mt-1 text-xs text-slate-500">Wilcoxon ranking vs. all other cells; log FC and adjusted p-values.</p></div>
           <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="bg-slate-800/70 text-slate-300"><tr><th class="px-4 py-2">Gene</th><th class="px-4 py-2">Score</th><th class="px-4 py-2">Log FC</th><th class="px-4 py-2">Adjusted p</th></tr></thead><tbody id="markers"></tbody></table></div>
         </div>
       </section>
@@ -179,10 +179,10 @@ function draw() {
   const mode = $('colorBy').value;
   if (mode === 'cluster') {
     const traces = [...new Set(umapData.map(d => d.cluster))].sort((a,b)=>+a-+b).map((c,i) => { const z=umapData.filter(d=>d.cluster===c); return {x:z.map(d=>d.x),y:z.map(d=>d.y),mode:'markers',type:'scattergl',name:`Cluster ${c}`,text:z.map(d=>`${d.cell_id}<br>n_genes: ${d.n_genes}<br>mito: ${d.pct_mito.toFixed(2)}%`),hoverinfo:'text',marker:{color:palette[i%palette.length],size:6,opacity:.8}}; }); Plotly.newPlot('plot',traces,layout('UMAP — clusters'),{responsive:true,displaylogo:false});
-  } else { const vals=umapData.map(d=>d[mode]); Plotly.newPlot('plot',[{x:umapData.map(d=>d.x),y:umapData.map(d=>d.y),mode:'markers',type:'scattergl',text:umapData.map(d=>d.cell_id),hoverinfo:'text',marker:{color:vals,colorscale:'Viridis',size:6,colorbar:{title:mode}}}],layout(`UMAP — ${mode}`),{responsive:true,displaylogo:false}); }
+  } else { const vals=umapData.map(d=>d[mode]); Plotly.newPlot('plot',[{x:umapData.map(d=>d.x),y:umapData.map(d=>d.y),mode:'markers',type:'scattergl',text:umapData.map(d=>`${d.cell_id}<br>${mode === 'n_genes' ? 'Detected genes' : 'Mitochondrial counts'}: ${mode === 'n_genes' ? d.n_genes : d.pct_mito.toFixed(2) + '%'}`),hoverinfo:'text',marker:{color:vals,colorscale:'Cividis',size:6,line:{color:'#0f172a',width:.2},colorbar:{title:mode === 'n_genes' ? 'Genes/cell' : 'Mitochondrial %',titlefont:{color:'#f8fafc'},tickfont:{color:'#cbd5e1'}}}}],layout(`UMAP — ${mode}`),{responsive:true,displaylogo:false}); }
 }
-function layout(title) { return {title:{text:title,font:{color:'#e2e8f0'}},paper_bgcolor:'#0f172a',plot_bgcolor:'#0f172a',font:{color:'#94a3b8'},margin:{l:45,r:20,t:55,b:45},xaxis:{title:'UMAP 1',gridcolor:'#1e293b'},yaxis:{title:'UMAP 2',gridcolor:'#1e293b'}}; }
-async function plotGene() { const gene=$('gene').value.trim(); if(!gene)return; const r=await fetch(`/api/genes/${encodeURIComponent(gene)}`); if(!r.ok){alert('Gene not found');return;} const values=(await r.json()).values; const byId=new Map(values.map(d=>[d.cell_id,d.expression])); Plotly.newPlot('plot',[{x:umapData.map(d=>d.x),y:umapData.map(d=>d.y),mode:'markers',type:'scattergl',text:umapData.map(d=>d.cell_id),hoverinfo:'text',marker:{color:umapData.map(d=>byId.get(d.cell_id)),colorscale:'Viridis',size:6,colorbar:{title:gene}}}],layout(`UMAP — ${gene} expression`),{responsive:true,displaylogo:false}); }
+function layout(title) { return {title:{text:title,font:{color:'#f8fafc',size:16}},paper_bgcolor:'#0f172a',plot_bgcolor:'#0f172a',font:{color:'#cbd5e1'},margin:{l:58,r:28,t:58,b:52},xaxis:{title:'UMAP 1 (arbitrary units)',gridcolor:'#334155',zerolinecolor:'#475569'},yaxis:{title:'UMAP 2 (arbitrary units)',gridcolor:'#334155',zerolinecolor:'#475569'}}; }
+async function plotGene() { const gene=$('gene').value.trim(); if(!gene)return; const r=await fetch(`/api/genes/${encodeURIComponent(gene)}`); if(!r.ok){alert('Gene not found');return;} const values=(await r.json()).values; const byId=new Map(values.map(d=>[d.cell_id,d.expression])); Plotly.newPlot('plot',[{x:umapData.map(d=>d.x),y:umapData.map(d=>d.y),mode:'markers',type:'scattergl',text:umapData.map(d=>`${d.cell_id}<br>${gene} (log-normalized): ${byId.get(d.cell_id).toFixed(3)}`),hoverinfo:'text',marker:{color:umapData.map(d=>byId.get(d.cell_id)),colorscale:'Cividis',size:6,line:{color:'#0f172a',width:.2},colorbar:{title:`${gene} (log-normalized)`,titlefont:{color:'#f8fafc'},tickfont:{color:'#cbd5e1'}}}}],layout(`UMAP — ${gene} expression`),{responsive:true,displaylogo:false}); }
 async function loadMarkers() { const c=$('cluster').value; if(c===undefined)return; const d=await (await fetch(`/api/clusters/${c}/markers?n_genes=15`)).json(); $('quality').innerHTML=`<b>Cluster ${c}</b><br>${d.n_cells} cells<br>n_genes median: ${d.quality.n_genes_median.toFixed(0)} [${d.quality.n_genes_range.join('–')}]<br>mito median: ${d.quality.pct_mito_median.toFixed(2)}% [${d.quality.pct_mito_range.map(x=>x.toFixed(2)).join('–')}%]`; $('markers').innerHTML=d.markers.map(m=>`<tr class="border-t border-slate-800"><td class="px-4 py-2 font-medium">${m.gene}</td><td class="px-4 py-2">${m.score.toFixed(2)}</td><td class="px-4 py-2">${m.logfoldchange.toFixed(2)}</td><td class="px-4 py-2">${m.pval_adj.toExponential(2)}</td></tr>`).join(''); }
 load();
 </script>
