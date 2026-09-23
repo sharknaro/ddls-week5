@@ -3,7 +3,7 @@
 **Lab:** Interview a Single-Cell Data Owner
 **Data owner:** Alex Rios — PhD student who thinks they've found a novel immune cell population
 **Student:** Baris Kara <baris51519@gmail.com>
-**Exported:** 2026-09-23T12:31:45+00:00
+**Exported:** 2026-09-23T12:38:17+00:00
 
 > This is the record of your interview with the data owner. Hand it to your analyst agent as the raw source for `AGENTS.md` and `spec.md`.
 
@@ -389,3 +389,120 @@ Great - finally. Can you state what would done look like with the analysis outco
 - **Cluster 7 — low-confidence/artifact candidate; do not send to Maya.** Record its 10-cell size, high gene counts, proliferative genes, mixed lymphoid/cytotoxic pattern, 5/10 cells above 2,500 genes, and lack of doublet scores. It stays out of experimental planning unless additional evidence shows a coherent lineage program across nearly all cells.
 
 For me, the analysis is complete when those labels, supporting numbers, limitations, and a clear action—**cautious internal follow-up for cluster 4; set aside cluster 7**—are all visible without requiring Maya or my PI to reinterpret the whole dataset.
+
+**You**:
+
+Can you specify also what it the prefered final handoof format and intended auidence use - navigator layoutm evidence details, how PI/Maya decisions should be. Also elaborate,  what validation and reproducibility boundaries are required - checks, tolerances, and what constitutes a failed validation. Finally, state what is the action plan after the labels - ownership, review steps, and criteria for advancing or closing cluster 4 follow-up
+
+**Alex Rios**:
+
+Yes. I’d want the handoff to be a **decision-oriented navigator**, not just a plot collection.
+
+## Preferred handoff format
+
+### 1. One-page summary for PI and Maya
+
+A table like:
+
+| Cluster | Label | Evidence | Limitation | Action |
+|---|---|---|---|---|
+| 4 | Known-like myeloid candidate | 163 cells; 1,263 median genes/cell; 2.4% mito; 163/163 co-express ≥3 of 7 myeloid-associated genes; similarity to clusters 1, 5 and 2 | No donor/batch metadata; no formal doublet scores; 112/163 trigger a permissive non-myeloid screen | Discuss with PI; cautious internal follow-up; no novelty claim |
+| 7 | Low-confidence/artifact candidate | 10 cells; 2,363.5 median genes/cell; 8/10 co-express ≥3 proliferation-associated genes; mixed lymphoid/cytotoxic features; 5/10 >2,500 genes/cell | No formal doublet scores; tiny cluster; high complexity | Do not send to Maya; set aside pending contrary evidence |
+
+The label, supporting numbers, limitations, and action should be visible together. Maya should not have to infer the action from a map.
+
+### 2. Evidence pages or appendix
+
+For each cluster, include:
+
+- cluster size and QC distributions;
+- top genes and values from log-normalized `adata.X`;
+- detection fractions from raw counts;
+- per-cell co-expression summary;
+- comparison with biologically relevant neighboring clusters;
+- doublet-score information, if available;
+- exact data layer and threshold definitions;
+- a note stating that donor, sample, batch, and library recurrence cannot be assessed.
+
+### 3. Technical provenance
+
+The handoff should record:
+
+- input `.h5ad` filename and version/date;
+- cell and gene filtering;
+- normalization and transformation;
+- source of cluster labels;
+- source of `n_genes` and `pct_mito`;
+- exact marker-ranking method;
+- whether values are raw counts or log-normalized values;
+- software and analysis version if available.
+
+That is mainly for the analyst and me, not for Maya, but it is what makes the result auditable.
+
+## How PI and Maya should use it
+
+**PI:** use the summary to decide whether cluster 4 merits a known-cell interpretation and a small validation effort. I would present it as “a coherent myeloid-like cluster whose novelty is unsupported,” not as a discovery.
+
+**Maya:** should act only on an explicit “advance” recommendation. Cluster 7 should be marked **do not order reagents**. Cluster 4 should not trigger a novel-population experiment yet; at most, it supports targeted confirmation of the likely known identity.
+
+## Validation and reproducibility boundaries
+
+I’d separate validation into three levels.
+
+### Computational consistency
+
+Pass if:
+
+- cluster counts sum to **2,700**;
+- cluster 4 has 163 cells and cluster 7 has 10;
+- reported QC summaries can be reproduced from the same count matrix;
+- marker values match the stated source, `adata.X`;
+- detection and co-expression results match `adata.layers["counts"]`;
+- labels and expression values refer to the same filtered cells.
+
+A mismatch in cluster membership, matrix layer, filtering state, or cell count would be a **failed validation**, not a minor caveat.
+
+For numerical summaries, tiny differences from rounding are acceptable—for example, a displayed value differing only in the last reported decimal. A materially different median, range, detection count, or marker rank would require investigation.
+
+### Biological coherence
+
+For cluster 4, I’d regard the current evidence as passing the **provisional coherence** check because 163/163 cells co-express at least three of the seven genes. I would still want to know whether the non-myeloid signals are isolated low-level detections or a genuine second program.
+
+A failed coherence check would be:
+
+- the myeloid program is concentrated in a minority of cells;
+- the cluster separates only because of QC variables;
+- most cells show a strong incompatible lineage program;
+- or removing a few cells eliminates the apparent distinction.
+
+For cluster 7, it would pass only if nearly all cells shared a coherent lineage-associated program beyond proliferation, with no strong dependence on the five high-complexity cells.
+
+### Biological reproducibility
+
+This dataset cannot pass donor- or batch-level reproducibility because those identifiers are absent. That is a **boundary of the analysis**, not something we can infer from the cluster table.
+
+A novel-population claim would therefore fail validation here unless it were independently reproduced in another annotated dataset or in new samples. Cluster 4 can be discussed as known-like, but not as a validated novel population.
+
+## Action plan after labeling
+
+### Cluster 4
+
+**Owner:** I would own the biological interpretation and PI discussion; the analyst owns the reproducible computation and evidence package; Maya only acts after the PI agrees on the proposed confirmation.
+
+1. Analyst supplies the navigator and technical provenance.
+2. I review the per-cell mixed-lineage flags and inspect whether they are coherent secondary programs or permissive detections.
+3. We apply any available doublet scoring and review high-mitochondrial or unusually high-complexity cells.
+4. I present cluster 4 to the PI as a known-like myeloid candidate.
+5. Advance it only if the per-cell program remains coherent after QC/doublet review and the proposed experiment tests the likely known identity.
+6. Close the novelty claim unless an independent dataset shows a distinct, reproducible program.
+
+### Cluster 7
+
+**Owner:** I would document the rationale for setting it aside; no reagent or experiment owner is assigned yet.
+
+1. Record the current low-confidence label.
+2. Review the five high-complexity cells and any available doublet scores.
+3. Reopen only if most cells show a consistent non-proliferative lineage identity, low doublet evidence, and the signal is not driven by one or two cells.
+4. Otherwise close it as an experimental lead.
+
+So the final operational outcome is: **cluster 4 advances to cautious known-cell review; cluster 7 is closed for experimental follow-up unless specific contrary evidence appears.**
