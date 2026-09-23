@@ -134,7 +134,7 @@ HTML_PAGE = r'''<!doctype html>
     <header class="mb-5">
       <p class="text-sm font-semibold uppercase tracking-widest text-cyan-400">PBMC single-cell explorer</p>
       <h1 class="mt-1 text-3xl font-bold tracking-tight">UMAP and cluster markers</h1>
-      <p class="mt-2 max-w-3xl text-slate-400">Explore 2,700 cells from <code>pbmc3k.h5ad</code>. Gene values are log-normalized expression from <code>adata.X</code>; detection is based on raw counts.</p>
+      <p class="mt-2 max-w-3xl text-slate-400">Explore 2,700 cells from <code>pbmc3k.h5ad</code>. Start with the cluster-colored UMAP, then choose a gene and press <b>Show gene</b>.</p>
     </header>
     <section class="grid gap-4 lg:grid-cols-[18rem_1fr]">
       <aside class="rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-xl">
@@ -142,14 +142,14 @@ HTML_PAGE = r'''<!doctype html>
           <label class="block"><span class="text-sm text-slate-300">Color points by</span>
             <select id="colorBy" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"><option value="cluster">Leiden cluster (categorical)</option><option value="n_genes">Detected genes per cell</option><option value="pct_mito">Mitochondrial counts (%)</option></select>
           </label>
-          <label class="block"><span class="text-sm text-slate-300">Gene expression (log-normalized)</span>
-            <div class="mt-1 flex gap-2"><input id="gene" list="genes" placeholder="e.g. LST1" aria-label="Gene symbol" class="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 uppercase" /><button id="geneBtn" class="rounded-lg bg-cyan-500 px-3 py-2 font-semibold text-slate-950">Plot</button></div>
-            <p class="mt-1 text-xs text-slate-500">Values are from <code>adata.X</code>, not raw UMI counts.</p><datalist id="genes"></datalist>
+          <label class="block"><span class="text-sm text-slate-300">Show a gene on the UMAP</span>
+            <div class="mt-1 flex gap-2"><input id="gene" list="genes" value="LST1" placeholder="Type a gene symbol, e.g. LST1" aria-label="Gene symbol" class="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 uppercase" /><button id="geneBtn" class="rounded-lg bg-cyan-500 px-3 py-2 font-semibold text-slate-950">Show gene</button></div>
+            <p class="mt-1 text-xs text-slate-500">Type a symbol or choose a suggestion. Values are log-normalized expression from <code>adata.X</code>.</p><datalist id="genes"></datalist>
           </label>
-          <label class="block"><span class="text-sm text-slate-300">Cluster markers</span>
-            <select id="cluster" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"></select>
+          <label class="block"><span class="text-sm text-slate-300">Inspect cluster markers</span>
+            <select id="cluster" aria-label="Cluster for marker table" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"></select>
           </label>
-          <div id="quality" class="rounded-lg bg-slate-800/70 p-3 text-sm text-slate-300">Select a cluster to see quality.</div>
+          <div id="quality" class="rounded-lg bg-slate-800/70 p-3 text-sm text-slate-300">Choose a cluster to see its quality summary and markers.</div>
         </div>
       </aside>
       <section class="min-w-0 space-y-4">
@@ -172,8 +172,9 @@ async function load() {
   $('genes').innerHTML = ['LST1','FCER1G','FCGR3A','AIF1','CTSS','CD68','CST3','STMN1','PCNA','TYMS','KIAA0101'].map(g => `<option value="${g}"></option>`).join('');
   $('colorBy').addEventListener('change', draw);
   $('geneBtn').addEventListener('click', plotGene);
+  $('gene').addEventListener('keydown', event => { if (event.key === 'Enter') plotGene(); });
   $('cluster').addEventListener('change', loadMarkers);
-  draw(); loadMarkers();
+  draw(); loadMarkers(); plotGene();
 }
 function draw() {
   const mode = $('colorBy').value;
