@@ -162,7 +162,7 @@ HTML_PAGE = r'''<!doctype html>
     </header>
     <section class="grid gap-4 lg:grid-cols-[18rem_1fr]">
       <aside class="rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-xl">
-        <div class="mb-4 flex items-center justify-between gap-3"><div><h2 class="font-semibold">Controls</h2><p class="text-xs text-slate-500">Choose a view and inspect cells.</p></div><label class="text-xs text-slate-500">Layout<select id="layoutMode" class="ml-1 rounded border border-slate-700 bg-slate-800 px-2 py-1 text-slate-300"><option value="stacked">A · stacked</option><option value="toolbar">B · toolbar</option></select></label></div>
+        <div class="mb-4"><h2 class="font-semibold">Controls</h2><p class="text-xs text-slate-500">Choose a view and inspect cells.</p></div>
         <div id="controls" class="space-y-4">
           <label class="block"><span class="text-sm text-slate-300">Color points by</span>
             <select id="colorBy" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"><option value="cluster">Leiden cluster (categorical)</option><option value="n_genes">Detected genes per cell</option><option value="pct_mito">Mitochondrial counts (%)</option></select>
@@ -196,7 +196,6 @@ HTML_PAGE = r'''<!doctype html>
 <script>
 const palette = ['#22d3ee','#a78bfa','#f472b6','#facc15','#4ade80','#fb923c','#60a5fa','#f87171'];
 let umapData;
-const layoutMode = localStorage.getItem('control-layout') || 'stacked';
 const $ = id => document.getElementById(id);
 function setStatus(message, kind = 'info') { const el = $('status'); if (!message) { el.className = 'hidden'; el.textContent = ''; return; } const styles = {info: 'border-cyan-800 bg-cyan-950/50 text-cyan-200', error: 'border-red-800 bg-red-950/50 text-red-200', success: 'border-emerald-800 bg-emerald-950/50 text-emerald-200'}; el.className = `rounded-lg border px-3 py-2 text-sm ${styles[kind] || styles.info}`; el.textContent = message; }
 function setBusy(button, busy, label) { button.disabled = busy; button.textContent = busy ? 'Loading…' : label; button.classList.toggle('opacity-60', busy); button.classList.toggle('cursor-not-allowed', busy); }
@@ -207,21 +206,18 @@ async function load() {
   } catch (error) { $('plot').innerHTML = '<div class="flex h-full items-center justify-center p-6 text-center text-red-300">The dataset could not be loaded.</div>'; setStatus(`${error.message} Check that the app is running and the H5AD file is available.`, 'error'); return; }
   const clusters = [...new Set(umapData.map(d => d.cluster))].sort((a,b) => +a - +b);
   $('cluster').innerHTML = clusters.map(c => `<option>${c}</option>`).join('');
-  $('genes').innerHTML = [...new Set(['LST1','FCER1G','FCGR3A','AIF1','CTSS','CD68','CST3','STMN1','PCNA','TYMS','KIAA0101', ...umapData.map(d => d.cluster)])].filter(g => /^[A-Z][A-Z0-9-]*$/.test(g)).map(g => `<option value="${g}"></option>`).join('');
-  $('layoutMode').value = layoutMode;
-  $('layoutMode').addEventListener('change', event => { localStorage.setItem('control-layout', event.target.value); applyLayout(event.target.value); });
-  applyLayout(layoutMode);
+  $('genes').innerHTML = ['FCER1G','LST1','CD3D','FCGR3A','AIF1','CTSS','CD68','CST3','STMN1','PCNA','TYMS','KIAA0101'].map(g => `<option value="${g}"></option>`).join('');
   $('colorBy').addEventListener('change', () => { draw(); });
   $('geneBtn').addEventListener('click', plotGene);
   $('gene').addEventListener('keydown', event => { if (event.key === 'Enter') plotGene(); });
   $('cluster').addEventListener('change', loadMarkers);
-  document.querySelectorAll('.cluster-quick').forEach(button => button.addEventListener('click', () => { $('cluster').value = button.dataset.cluster; loadMarkers(); }));
+  document.querySelectorAll('.cluster-quick').forEach(button => button.addEventListener('click', () => { $('cluster').value = button.dataset.cluster; drawCluster(button.dataset.cluster); loadMarkers(); }));
   draw(); await loadOverview(); await loadMarkers(); await plotGene(); setStatus('Ready. Hover over cells or choose another view.', 'success');
 }
-function applyLayout(mode) { const controls = $('controls'); controls.className = mode === 'toolbar' ? 'grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end' : 'space-y-4'; }
 function colorLabel(mode) { return mode === 'cluster' ? 'Leiden cluster' : mode === 'n_genes' ? 'Number of genes detected per cell' : 'Percentage of mitochondrial counts'; }
 function setActiveView(label) { $('activeView').textContent = `Active coloring: ${label}`; }
 function setGeneView(gene) { $('colorBy').value = 'cluster'; setActiveView(`${gene} expression (log-normalized)`); }
+function drawCluster(cluster) { $('colorBy').value = 'cluster'; const clusters = [...new Set(umapData.map(d => d.cluster))].sort((a,b)=>+a-+b); const traces = clusters.map((c,i) => { const z=umapData.filter(d=>d.cluster===c); const selected = c === cluster; return {x:z.map(d=>d.x),y:z.map(d=>d.y),mode:'markers',type:'scattergl',name:`Cluster ${c}`,text:z.map(d=>`${d.cell_id}<br>Cluster: ${c}<br>Number of genes: ${d.n_genes}<br>Percentage of mitochondria: ${d.pct_mito.toFixed(2)}%`),hoverinfo:'text',marker:{color:palette[i%palette.length],size:selected?9:5,opacity:selected?1:.18,line:{color:selected?'#ffffff':'#0f172a',width:selected?1.5:.2}}}; }); Plotly.newPlot('plot',traces,layout(`UMAP — Cluster ${cluster} highlighted`),{responsive:true,displaylogo:false}); setActiveView(`Leiden cluster — Cluster ${cluster} highlighted`); }
 function draw() {
   const mode = $('colorBy').value;
   setActiveView(colorLabel(mode));
