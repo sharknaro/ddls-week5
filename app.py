@@ -180,6 +180,7 @@ HTML_PAGE = r'''<!doctype html>
           </label>
           <label class="block"><span class="text-sm text-slate-700">Selected cluster</span>
             <select id="cluster" class="mt-1 w-full rounded-lg border border-[#cbbda9] bg-white px-3 py-2 text-slate-900"></select>
+            <button id="markCluster" class="mt-2 w-full rounded-lg border border-[#cbbda9] bg-[#fffaf1] px-3 py-2 text-left text-sm font-medium text-slate-800" type="button">○ Mark cluster</button>
           </label>
           <div id="quality" class="rounded-lg bg-[#eee5d6] p-3 text-sm text-slate-700">Loading selected-cluster QC…</div>
 
@@ -203,6 +204,7 @@ HTML_PAGE = r'''<!doctype html>
   </main>
 <script>
 const palette = ['#22d3ee','#a78bfa','#f472b6','#facc15','#4ade80','#fb923c','#60a5fa','#f87171'];
+let markCluster = false;
 let umapData;
 let activeView = 'cluster';
 let isolateSelectedCluster = false;
@@ -223,7 +225,8 @@ async function load() {
     $('colorBy').addEventListener('change', () => { activeView = $('colorBy').value; $('geneControl').classList.toggle('hidden', activeView !== 'gene'); if (activeView !== 'gene') draw(); });
     $('geneBtn').addEventListener('click', plotGene);
     document.querySelectorAll('.evidence-shortcut').forEach(button => button.addEventListener('click', () => { if (button.dataset.gene) { $('gene').value = button.dataset.gene; plotGene(); } else { activeView = button.dataset.mode; draw(); } }));
-    $('cluster').addEventListener('change', loadMarkers);
+    $('cluster').addEventListener('change', () => { loadMarkers(); if (activeView !== 'cluster') draw(); });
+    $('markCluster').addEventListener('click', () => { markCluster = !markCluster; draw(); });
     await loadOverview(); draw(); await loadMarkers();
   } catch (error) { $('plot').innerHTML = `<div class="flex h-full items-center justify-center p-6 text-center text-red-300">Could not load the UMAP. ${error.message}</div>`; }
 }
@@ -239,7 +242,7 @@ function draw() {
   const labels = {cluster:'Cluster', n_genes:'Gene count<br>per cell', pct_mito:'Mitochondrial<br>reads (%)', gene:'Gene expression'};
   if (mode === 'cluster') {
     const traces = [...new Set(umapData.map(d => d.cluster))].sort((a,b)=>+a-+b).map((c,i) => { const z=umapData.filter(d=>d.cluster===c); return {x:z.map(d=>d.x),y:z.map(d=>d.y),mode:'markers',type:'scattergl',name:`Cluster ${c}`,text:z.map(d=>`${d.cell_id}<br>Detected genes: ${d.n_genes}<br>Mitochondrial percentage: ${d.pct_mito.toFixed(2)}%`),hoverinfo:'text',marker:{color:palette[i%palette.length],size:6,opacity:.8}}; }); Plotly.newPlot('plot',traces,layout('UMAP — coloured by Cluster'),{responsive:true,displaylogo:false,displayModeBar:false,scrollZoom:true});
-  } else { const vals=umapData.map(d=>d[mode]); const selected=$('cluster').value; const selectedCells=umapData.filter(d=>d.cluster===selected); Plotly.newPlot('plot',[{x:umapData.map(d=>d.x),y:umapData.map(d=>d.y),mode:'markers',type:'scattergl',text:umapData.map(d=>d.cell_id),hoverinfo:'text',marker:{color:vals,colorscale:'Viridis',size:6,colorbar:{title:{text:labels[mode],side:'top'},titlefont:{size:12},tickfont:{size:10}}}},{x:selectedCells.map(d=>d.x),y:selectedCells.map(d=>d.y),mode:'markers',type:'scattergl',hoverinfo:'skip',showlegend:false,marker:{color:'rgba(0,0,0,0)',size:8,line:{color:'#3f2a1f',width:1.5}}}],layout(`UMAP — coloured by ${labels[mode]}`),{responsive:true,displaylogo:false,displayModeBar:false,scrollZoom:true}); }
+  } else { const vals=umapData.map(d=>d[mode]); const selected=$('cluster').value; const selectedCells=umapData.filter(d=>d.cluster===selected); $('markCluster').textContent = `${markCluster ? '⊙' : '○'} Mark cluster`; Plotly.newPlot('plot',[{x:umapData.map(d=>d.x),y:umapData.map(d=>d.y),mode:'markers',type:'scattergl',text:umapData.map(d=>d.cell_id),hoverinfo:'text',marker:{color:vals,colorscale:'Viridis',size:6,colorbar:{title:{text:labels[mode],side:'top'},titlefont:{size:12},tickfont:{size:10}}}},{x:markCluster ? selectedCells.map(d=>d.x) : [],y:markCluster ? selectedCells.map(d=>d.y) : [],mode:'markers',type:'scattergl',hoverinfo:'skip',showlegend:false,marker:{color:'rgba(0,0,0,0)',size:8,line:{color:'#3f2a1f',width:1.5}}}],layout(`UMAP — coloured by ${labels[mode]}`),{responsive:true,displaylogo:false,displayModeBar:false,scrollZoom:true}); }
 }
 function layout(title) { return {title:{text:title,font:{color:'#1f2937'}},paper_bgcolor:'#fffaf1',plot_bgcolor:'#fffaf1',font:{color:'#475569'},margin:{l:55,r:95,t:55,b:60},xaxis:{title:'UMAP 1',gridcolor:'#e5dacb'},yaxis:{title:'UMAP 2',gridcolor:'#e5dacb'},legend:{bgcolor:'#fffaf1',font:{color:'#334155'},orientation:'v',x:1.02,xanchor:'left',y:1,yanchor:'top'}}; }
 async function plotGene() { const gene=$('gene').value.trim(); if(!gene)return; $('geneStatus').textContent = `Loading ${gene} expression…`; const r=await fetch(`/api/genes/${encodeURIComponent(gene)}`); if(!r.ok){$('geneStatus').textContent = `Gene not found: ${gene}`; return;} const data=await r.json(); const values=data.values; const byId=new Map(values.map(d=>[d.cell_id,d.expression])); activeView = 'gene'; $('colorBy').value = 'gene'; $('geneControl').classList.remove('hidden'); $('geneStatus').textContent = `Active colouring: ${data.gene} expression (log-normalized adata.X).`; Plotly.newPlot('plot',[{x:umapData.map(d=>d.x),y:umapData.map(d=>d.y),mode:'markers',type:'scattergl',text:umapData.map(d=>d.cell_id),hoverinfo:'text',marker:{color:umapData.map(d=>byId.get(d.cell_id)),colorscale:'Viridis',size:6,colorbar:{title:{text:`${data.gene}<br>expression`,side:'top'},titlefont:{size:12},tickfont:{size:10}}}}],layout(`UMAP — coloured by Gene expression (${data.gene})`),{responsive:true,displaylogo:false,displayModeBar:false,scrollZoom:true}); }
