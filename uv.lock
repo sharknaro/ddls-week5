@@ -1427,9 +1427,6 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
 ]
 
-[package.metadata.requires-dev]
-dev = []
-
 [[package]]
 name = "pillow"
 version = "12.3.0"
