@@ -168,13 +168,12 @@ HTML_PAGE = r'''<!doctype html>
     <section class="grid gap-4 lg:grid-cols-[18rem_1fr]">
       <aside class="h-[62vh] min-h-[28rem] overflow-y-auto rounded-2xl border border-[#d8cdbd] bg-[#fffaf1] p-4 shadow-xl">
         <div class="mb-4 rounded-lg border border-[#d8cdbd] bg-[#eee5d6] p-3"><h2 class="text-xs font-semibold uppercase tracking-widest text-[#6f3f24]">Owner question</h2><p class="mt-2 text-sm leading-5 text-slate-800">Is Cluster 4 a genuinely novel population, or does the evidence support a known cell type?</p></div>
+          <div class="rounded-lg border border-[#d8cdbd] bg-[#eee5d6] p-3"><h2 class="text-xs font-semibold uppercase tracking-widest text-[#6f3f24]">Evidence shortcuts</h2><div class="mt-2 flex flex-wrap gap-1"><button class="evidence-shortcut rounded border border-[#cbbda9] bg-[#fffaf1] px-2 py-1 text-xs" data-gene="LST1">LST1</button><button class="evidence-shortcut rounded border border-[#cbbda9] bg-[#fffaf1] px-2 py-1 text-xs" data-gene="FCER1G">FCER1G</button><button class="evidence-shortcut rounded border border-[#cbbda9] bg-[#fffaf1] px-2 py-1 text-xs" data-gene="FCGR3A">FCGR3A</button><button class="evidence-shortcut rounded border border-[#cbbda9] bg-[#fffaf1] px-2 py-1 text-xs" data-gene="AIF1">AIF1</button><button class="evidence-shortcut rounded border border-[#cbbda9] bg-[#fffaf1] px-2 py-1 text-xs" data-mode="pct_mito">Mito %</button><button class="evidence-shortcut rounded border border-[#cbbda9] bg-[#fffaf1] px-2 py-1 text-xs" data-mode="n_genes">Gene count</button></div></div>
         <div class="mb-4"><h2 class="text-sm font-semibold uppercase tracking-widest text-[#6f3f24]">Plot tools</h2><div id="plotToolbar" class="mt-2 flex flex-wrap gap-1" role="toolbar" aria-label="Plot controls"><button data-action="pan" title="Pan" aria-label="Pan" class="plot-tool">↔</button><button data-action="autoscale" title="Autoscale" aria-label="Autoscale" class="plot-tool">⤢</button><button data-action="download" title="Download plot image" aria-label="Download plot image" class="plot-tool">⇩</button></div></div>
         <div class="space-y-4">
           <label class="block"><span class="text-sm font-medium text-slate-700">Color UMAP by</span>
             <select id="colorBy" class="mt-1 w-full rounded-lg border border-[#cbbda9] bg-white px-3 py-2 text-slate-900"><option value="cluster">Cluster</option><option value="n_genes">Detected genes per cell</option><option value="pct_mito">Mitochondrial reads (%)</option><option value="gene">Gene expression</option></select>
           </label>
-          <button id="isolateCluster" class="hidden w-full rounded-lg border border-[#cbbda9] bg-[#fffaf1] px-3 py-2 text-left text-sm font-medium text-slate-800" type="button">○ Isolate selected cluster</button>
-          <button id="clusterBorders" class="hidden w-full rounded-lg border border-[#cbbda9] bg-[#fffaf1] px-3 py-2 text-left text-sm font-medium text-slate-800" type="button">○ Show cluster borders</button>
           <label id="geneControl" class="hidden block"><span class="text-sm font-medium text-slate-700">Gene expression</span>
             <div class="mt-1 flex gap-2"><select id="gene" class="min-w-0 flex-1 rounded-lg border border-[#cbbda9] bg-white px-3 py-2 text-slate-900" aria-label="Select a gene"><option value="">Choose a gene…</option></select><button id="geneBtn" class="rounded-lg bg-[#b45309] px-3 py-2 font-semibold text-white">Plot gene</button></div>
             <p class="mt-1 text-xs text-slate-600">Choose a gene to color each UMAP cell by its log-normalized expression.</p>
@@ -185,7 +184,7 @@ HTML_PAGE = r'''<!doctype html>
           </label>
           <div id="quality" class="rounded-lg bg-[#eee5d6] p-3 text-sm text-slate-700">Loading selected-cluster QC…</div>
 
-          <div class="rounded-lg border border-[#d8cdbd] bg-[#eee5d6] p-3"><h2 class="text-xs font-semibold uppercase tracking-widest text-[#6f3f24]">Evidence shortcuts</h2><div class="mt-2 flex flex-wrap gap-1"><button class="evidence-shortcut rounded border border-[#cbbda9] bg-[#fffaf1] px-2 py-1 text-xs" data-gene="LST1">LST1</button><button class="evidence-shortcut rounded border border-[#cbbda9] bg-[#fffaf1] px-2 py-1 text-xs" data-gene="FCER1G">FCER1G</button><button class="evidence-shortcut rounded border border-[#cbbda9] bg-[#fffaf1] px-2 py-1 text-xs" data-gene="FCGR3A">FCGR3A</button><button class="evidence-shortcut rounded border border-[#cbbda9] bg-[#fffaf1] px-2 py-1 text-xs" data-gene="AIF1">AIF1</button><button class="evidence-shortcut rounded border border-[#cbbda9] bg-[#fffaf1] px-2 py-1 text-xs" data-mode="pct_mito">Mito %</button><button class="evidence-shortcut rounded border border-[#cbbda9] bg-[#fffaf1] px-2 py-1 text-xs" data-mode="n_genes">Gene count</button></div></div>        </div>
+        </div>
       </aside>
       <section class="min-w-0">
         <div class="relative h-[62vh] min-h-[28rem] rounded-2xl border border-[#d8cdbd] bg-[#fffaf1]"><div id="plot" class="h-full w-full"></div></div>
@@ -237,12 +236,6 @@ function draw() {
   $('colorBy').value = mode === 'gene' ? 'gene' : mode;
   $('geneControl').classList.toggle('hidden', mode !== 'gene');
   const canIsolate = mode === 'n_genes' || mode === 'pct_mito';
-  $('isolateCluster').classList.toggle('hidden', !canIsolate);
-  $('isolateCluster').classList.toggle('bg-[#6f3f24]', canIsolate && isolateSelectedCluster);
-  $('isolateCluster').classList.toggle('text-white', canIsolate && isolateSelectedCluster);
-  $('isolateCluster').textContent = `${isolateSelectedCluster ? '⊙' : '○'} Isolate selected cluster`;
-  $('clusterBorders').classList.toggle('hidden', !canIsolate);
-  $('clusterBorders').textContent = `${showClusterBorders ? '⊙' : '○'} Show cluster borders`;
   const labels = {cluster:'Cluster', n_genes:'Gene count<br>per cell', pct_mito:'Mitochondrial<br>reads (%)', gene:'Gene expression'};
   if (mode === 'cluster') {
     const traces = [...new Set(umapData.map(d => d.cluster))].sort((a,b)=>+a-+b).map((c,i) => { const z=umapData.filter(d=>d.cluster===c); return {x:z.map(d=>d.x),y:z.map(d=>d.y),mode:'markers',type:'scattergl',name:`Cluster ${c}`,text:z.map(d=>`${d.cell_id}<br>Detected genes: ${d.n_genes}<br>Mitochondrial percentage: ${d.pct_mito.toFixed(2)}%`),hoverinfo:'text',marker:{color:palette[i%palette.length],size:6,opacity:.8}}; }); Plotly.newPlot('plot',traces,layout('UMAP — coloured by Cluster'),{responsive:true,displaylogo:false,displayModeBar:false,scrollZoom:true});
