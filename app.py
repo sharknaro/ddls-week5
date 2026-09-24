@@ -178,11 +178,13 @@ HTML_PAGE = r'''<!doctype html>
             <p class="mt-1 text-xs text-slate-600">Choose a gene to color each UMAP cell by its log-normalized expression.</p>
             <p id="geneStatus" class="mt-1 text-xs text-slate-600"></p>
           </label>
-          <label class="block"><span class="text-sm text-slate-700">Selected cluster</span>
-            <select id="cluster" class="mt-1 w-full rounded-lg border border-[#cbbda9] bg-white px-3 py-2 text-slate-900"></select>
-            <button id="markCluster" class="mt-2 w-full rounded-lg border border-[#cbbda9] bg-[#fffaf1] px-3 py-2 text-left text-sm font-medium text-slate-800" type="button">○ Mark cluster</button>
-          </label>
-          <div id="quality" class="rounded-lg bg-[#eee5d6] p-3 text-sm text-slate-700">Loading selected-cluster QC…</div>
+          <div id="selectedClusterSection">
+            <label class="block"><span class="text-sm text-slate-700">Selected cluster</span>
+              <select id="cluster" class="mt-1 w-full rounded-lg border border-[#cbbda9] bg-white px-3 py-2 text-slate-900"></select>
+              <button id="markCluster" class="mt-2 w-full rounded-lg border border-[#cbbda9] bg-[#fffaf1] px-3 py-2 text-left text-sm font-medium text-slate-800" type="button">○ Mark cluster</button>
+            </label>
+            <div id="quality" class="rounded-lg bg-[#eee5d6] p-3 text-sm text-slate-700">Loading selected-cluster QC…</div>
+          </div>
 
         </div>
       </aside>
@@ -238,6 +240,7 @@ function draw() {
   const mode = activeView;
   $('colorBy').value = mode === 'gene' ? 'gene' : mode;
   $('geneControl').classList.toggle('hidden', mode !== 'gene');
+  $('selectedClusterSection').classList.toggle('hidden', mode === 'gene');
   const canMark = mode === 'n_genes' || mode === 'pct_mito';
   $('markCluster').classList.toggle('hidden', !canMark);
   const canIsolate = mode === 'n_genes' || mode === 'pct_mito';
