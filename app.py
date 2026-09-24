@@ -167,6 +167,7 @@ HTML_PAGE = r'''<!doctype html>
     </header>
     <section class="grid gap-4 lg:grid-cols-[18rem_1fr]">
       <aside class="h-[62vh] min-h-[28rem] overflow-y-auto rounded-2xl border border-[#d8cdbd] bg-[#fffaf1] p-4 shadow-xl">
+        <div class="mb-4 rounded-lg border border-[#d8cdbd] bg-[#eee5d6] p-3"><h2 class="text-xs font-semibold uppercase tracking-widest text-[#6f3f24]">Owner question</h2><p class="mt-2 text-sm leading-5 text-slate-800">Is Cluster 4 a genuinely novel population, or does the evidence support a known cell type?</p></div>
         <div class="mb-4"><h2 class="text-sm font-semibold uppercase tracking-widest text-[#6f3f24]">Plot tools</h2><div id="plotToolbar" class="mt-2 flex flex-wrap gap-1" role="toolbar" aria-label="Plot controls"><button data-action="pan" title="Pan" aria-label="Pan" class="plot-tool">↔</button><button data-action="autoscale" title="Autoscale" aria-label="Autoscale" class="plot-tool">⤢</button><button data-action="download" title="Download plot image" aria-label="Download plot image" class="plot-tool">⇩</button></div></div>
         <div class="space-y-4">
           <label class="block"><span class="text-sm font-medium text-slate-700">Color UMAP by</span>
