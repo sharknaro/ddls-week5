@@ -172,7 +172,7 @@ HTML_PAGE = r'''<!doctype html>
           <label class="block"><span class="text-sm font-medium text-slate-700">Color UMAP by</span>
             <select id="colorBy" class="mt-1 w-full rounded-lg border border-[#cbbda9] bg-white px-3 py-2 text-slate-900"><option value="cluster">Cluster</option><option value="n_genes">Detected genes per cell</option><option value="pct_mito">Mitochondrial reads (%)</option><option value="gene">Gene expression</option></select>
           </label>
-          <button id="isolateCluster" class="hidden w-full rounded-lg border border-[#cbbda9] bg-[#fffaf1] px-3 py-2 text-left text-sm font-medium text-slate-800" type="button">Isolate selected cluster</button>
+          <button id="isolateCluster" class="hidden w-full rounded-lg border border-[#cbbda9] bg-[#fffaf1] px-3 py-2 text-left text-sm font-medium text-slate-800" type="button">○ Isolate selected cluster</button>
           <button id="clusterBorders" class="hidden w-full rounded-lg border border-[#cbbda9] bg-[#fffaf1] px-3 py-2 text-left text-sm font-medium text-slate-800" type="button">○ Show cluster borders</button>
           <label id="geneControl" class="hidden block"><span class="text-sm font-medium text-slate-700">Gene expression</span>
             <div class="mt-1 flex gap-2"><select id="gene" class="min-w-0 flex-1 rounded-lg border border-[#cbbda9] bg-white px-3 py-2 text-slate-900" aria-label="Select a gene"><option value="">Choose a gene…</option></select><button id="geneBtn" class="rounded-lg bg-[#b45309] px-3 py-2 font-semibold text-white">Plot gene</button></div>
@@ -237,6 +237,7 @@ function draw() {
   $('isolateCluster').classList.toggle('hidden', !canIsolate);
   $('isolateCluster').classList.toggle('bg-[#6f3f24]', canIsolate && isolateSelectedCluster);
   $('isolateCluster').classList.toggle('text-white', canIsolate && isolateSelectedCluster);
+  $('isolateCluster').textContent = `${isolateSelectedCluster ? '⊙' : '○'} Isolate selected cluster`;
   $('clusterBorders').classList.toggle('hidden', !canIsolate);
   $('clusterBorders').textContent = `${showClusterBorders ? '⊙' : '○'} Show cluster borders`;
   const labels = {cluster:'Cluster', n_genes:'Gene count<br>per cell', pct_mito:'Mitochondrial<br>reads (%)', gene:'Gene expression'};
