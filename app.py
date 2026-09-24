@@ -169,7 +169,6 @@ HTML_PAGE = r'''<!doctype html>
       <aside class="h-[62vh] min-h-[28rem] overflow-y-auto rounded-2xl border border-[#d8cdbd] bg-[#fffaf1] p-4 shadow-xl">
         <div class="mb-4 rounded-lg border border-[#d8cdbd] bg-[#eee5d6] p-3"><h2 class="text-xs font-semibold uppercase tracking-widest text-[#6f3f24]">Owner question</h2><p class="mt-2 text-sm leading-5 text-slate-800">Is Cluster 4 a genuinely novel population, or does the evidence support a known cell type?</p></div>
           <div class="rounded-lg border border-[#d8cdbd] bg-[#eee5d6] p-3"><h2 class="text-xs font-semibold uppercase tracking-widest text-[#6f3f24]">Evidence shortcuts</h2><div class="mt-2 flex flex-wrap gap-1"><button class="evidence-shortcut rounded border border-[#cbbda9] bg-[#fffaf1] px-2 py-1 text-xs" data-gene="LST1">LST1</button><button class="evidence-shortcut rounded border border-[#cbbda9] bg-[#fffaf1] px-2 py-1 text-xs" data-gene="FCER1G">FCER1G</button><button class="evidence-shortcut rounded border border-[#cbbda9] bg-[#fffaf1] px-2 py-1 text-xs" data-gene="FCGR3A">FCGR3A</button><button class="evidence-shortcut rounded border border-[#cbbda9] bg-[#fffaf1] px-2 py-1 text-xs" data-gene="AIF1">AIF1</button><button class="evidence-shortcut rounded border border-[#cbbda9] bg-[#fffaf1] px-2 py-1 text-xs" data-mode="pct_mito">Mito %</button><button class="evidence-shortcut rounded border border-[#cbbda9] bg-[#fffaf1] px-2 py-1 text-xs" data-mode="n_genes">Gene count</button></div></div>
-        <div class="mb-4"><h2 class="text-sm font-semibold uppercase tracking-widest text-[#6f3f24]">Plot tools</h2><div id="plotToolbar" class="mt-2 flex flex-wrap gap-1" role="toolbar" aria-label="Plot controls"><button data-action="pan" title="Pan" aria-label="Pan" class="plot-tool">↔</button><button data-action="autoscale" title="Autoscale" aria-label="Autoscale" class="plot-tool">⤢</button><button data-action="download" title="Download plot image" aria-label="Download plot image" class="plot-tool">⇩</button></div></div>
         <div class="space-y-4">
           <label class="block"><span class="text-sm font-medium text-slate-700">Color UMAP by</span>
             <select id="colorBy" class="mt-1 w-full rounded-lg border border-[#cbbda9] bg-white px-3 py-2 text-slate-900"><option value="cluster">Cluster</option><option value="n_genes">Detected genes per cell</option><option value="pct_mito">Mitochondrial reads (%)</option><option value="gene">Gene expression</option></select>
@@ -187,7 +186,7 @@ HTML_PAGE = r'''<!doctype html>
         </div>
       </aside>
       <section class="min-w-0">
-        <div class="relative h-[62vh] min-h-[28rem] rounded-2xl border border-[#d8cdbd] bg-[#fffaf1]"><div id="plot" class="h-full w-full"></div></div>
+        <div class="relative h-[62vh] min-h-[28rem] rounded-2xl border border-[#d8cdbd] bg-[#fffaf1]"><div id="plot" class="h-full w-full"></div><button id="downloadPlot" title="Download plot image" aria-label="Download plot image" class="absolute right-3 top-3 z-10 rounded-lg border border-[#cbbda9] bg-[#fffaf1] px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm">⇩</button></div>
       </section>
       <section class="col-span-full min-w-0 space-y-4">
         <section class="rounded-2xl border border-[#b89470] bg-[#f3e6d3] p-4 text-slate-800" aria-labelledby="decision-heading"><h2 id="decision-heading" class="text-xs font-semibold uppercase tracking-widest text-[#6f3f24]">Decision &amp; evidence</h2><p class="mt-2 text-lg font-bold leading-6 text-[#5b321f]">Known-like myeloid/monocyte population — novelty not established.</p><p class="mt-3 text-sm"><strong>Myeloid markers:</strong> LST1, FCER1G, FCGR3A, AIF1, CTSS, CD68, CST3</p><p class="mt-1 text-sm"><strong>Median detected genes/cell:</strong> 1,263</p><p class="mt-1 text-sm"><strong>Median mitochondrial reads:</strong> ~2.4%</p><p class="mt-1 text-sm">Marker/QC evidence does not indicate an obvious low-quality cluster.</p><p class="mt-3 border-t border-[#d8c0a4] pt-3 text-sm"><strong>Honest limit:</strong> No donor/batch metadata or formal doublet scores are available, so recurrence across samples and formal doublet enrichment cannot be established.</p></section>
@@ -246,17 +245,7 @@ function layout(title) { return {title:{text:title,font:{color:'#1f2937'}},paper
 async function plotGene() { const gene=$('gene').value.trim(); if(!gene)return; $('geneStatus').textContent = `Loading ${gene} expression…`; const r=await fetch(`/api/genes/${encodeURIComponent(gene)}`); if(!r.ok){$('geneStatus').textContent = `Gene not found: ${gene}`; return;} const data=await r.json(); const values=data.values; const byId=new Map(values.map(d=>[d.cell_id,d.expression])); activeView = 'gene'; $('colorBy').value = 'gene'; $('geneControl').classList.remove('hidden'); $('geneStatus').textContent = `Active colouring: ${data.gene} expression (log-normalized adata.X).`; Plotly.newPlot('plot',[{x:umapData.map(d=>d.x),y:umapData.map(d=>d.y),mode:'markers',type:'scattergl',text:umapData.map(d=>d.cell_id),hoverinfo:'text',marker:{color:umapData.map(d=>byId.get(d.cell_id)),colorscale:'Viridis',size:6,colorbar:{title:{text:`${data.gene}<br>expression`,side:'top'},titlefont:{size:12},tickfont:{size:10}}}}],layout(`UMAP — coloured by Gene expression (${data.gene})`),{responsive:true,displaylogo:false,displayModeBar:false,scrollZoom:true}); }
 async function loadMarkers() { const c=$('cluster').value; if(c===undefined)return; $('quality').textContent = `Loading Cluster ${c} QC…`; const d=await (await fetch(`/api/clusters/${c}/markers?n_genes=15`)).json(); $('quality').innerHTML=`<b>Cluster ${c}</b><br>Cell count: ${d.n_cells}<br>Median detected genes/cell: ${d.quality.n_genes_median.toFixed(0)} (range ${d.quality.n_genes_range.join('–')})<br>Median mitochondrial percentage: ${d.quality.pct_mito_median.toFixed(2)}% (range ${d.quality.pct_mito_range.map(x=>x.toFixed(2)).join('–')}%)`; $('markers').innerHTML=d.markers.map(m=>`<tr class="border-t border-[#e5dacb] bg-[#fffaf1] text-slate-800"><td class="px-4 py-2 font-medium">${m.gene}</td><td class="px-4 py-2">${m.score.toFixed(2)}</td><td class="px-4 py-2">${m.logfoldchange.toFixed(2)}</td><td class="px-4 py-2">${m.pval_adj.toExponential(2)}</td></tr>`).join(''); }
 function wirePlotToolbar() {
-  document.querySelectorAll('#plotToolbar [data-action]').forEach(button => button.addEventListener('click', () => {
-    const action = button.dataset.action;
-    const plot = $('plot');
-    if (action === 'pan') {
-      const isActive = button.classList.contains('active');
-      button.classList.toggle('active', !isActive);
-      Plotly.relayout(plot, {'dragmode': isActive ? 'zoom' : 'pan'});
-    }
-    if (action === 'autoscale') Plotly.relayout(plot, {'xaxis.autorange': true, 'yaxis.autorange': true});
-    if (action === 'download') Plotly.downloadImage(plot, {format:'png', filename:'pbmc-umap', height:900, width:1400});
-  }));
+  $('downloadPlot').addEventListener('click', () => Plotly.downloadImage($('plot'), {format:'png', filename:'pbmc-umap', height:900, width:1400}));
 }
 wirePlotToolbar();
 load();
