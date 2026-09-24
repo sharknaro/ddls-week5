@@ -177,7 +177,6 @@ HTML_PAGE = r'''<!doctype html>
             <p class="mt-1 text-xs text-slate-600">Choose a gene to color each UMAP cell by its log-normalized expression.</p>
             <p id="geneStatus" class="mt-1 text-xs text-slate-600"></p>
           </label>
-          <div><span class="text-sm text-slate-700">Quick-select clusters</span><div class="mt-1 flex gap-2"><button class="quick rounded-lg border border-slate-700 px-3 py-1 text-sm" data-cluster="4">Cluster 4</button><button class="quick rounded-lg border border-slate-700 px-3 py-1 text-sm" data-cluster="7">Cluster 7</button></div></div>
           <label class="block"><span class="text-sm text-slate-700">Selected cluster</span>
             <select id="cluster" class="mt-1 w-full rounded-lg border border-[#cbbda9] bg-white px-3 py-2 text-slate-900"></select>
           </label>
@@ -219,7 +218,6 @@ async function load() {
     $('colorBy').addEventListener('change', () => { activeView = $('colorBy').value; $('geneControl').classList.toggle('hidden', activeView !== 'gene'); if (activeView !== 'gene') draw(); });
     $('geneBtn').addEventListener('click', plotGene);
     $('cluster').addEventListener('change', loadMarkers);
-    document.querySelectorAll('.quick').forEach(button => button.addEventListener('click', () => { $('cluster').value = button.dataset.cluster; loadMarkers(); }));
     await loadOverview(); draw(); await loadMarkers();
   } catch (error) { $('plot').innerHTML = `<div class="flex h-full items-center justify-center p-6 text-center text-red-300">Could not load the UMAP. ${error.message}</div>`; }
 }
