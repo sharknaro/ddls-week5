@@ -148,6 +148,11 @@ HTML_PAGE = r'''<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <style>
+    .plot-tool { width: 2rem; height: 2rem; border: 1px solid #cbbda9; border-radius: .375rem; background: #fffaf1; color: #334155; font-weight: 700; line-height: 1; }
+    .plot-tool:hover, .plot-tool:focus-visible { background: #e8dccb; color: #111827; outline: none; }
+    .plot-tool.active { background: #6f3f24; border-color: #6f3f24; color: #fffaf1; }
+  </style>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>PBMC Single-Cell Explorer</title>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -156,12 +161,13 @@ HTML_PAGE = r'''<!doctype html>
 <body class="min-h-screen bg-[#f4efe6] text-slate-900">
   <main class="mx-auto max-w-7xl p-4 sm:p-6">
     <header class="mb-5">
-      <p class="text-sm font-semibold uppercase tracking-widest text-cyan-400">PBMC single-cell explorer</p>
+      <p class="text-sm font-semibold uppercase tracking-widest text-[#6f3f24]">PBMC single-cell explorer</p>
       <h1 class="mt-1 text-3xl font-bold tracking-tight">UMAP and cluster markers</h1>
       <p class="mt-2 max-w-3xl text-slate-600">Explore 2,700 cells from <code>pbmc3k.h5ad</code>. Expression values use log-normalized <code>adata.X</code>.</p>
     </header>
     <section class="grid gap-4 lg:grid-cols-[18rem_1fr]">
-      <aside class="rounded-2xl border border-[#d8cdbd] bg-[#fffaf1] p-4 shadow-xl">
+      <aside class="h-[62vh] min-h-[28rem] overflow-y-auto rounded-2xl border border-[#d8cdbd] bg-[#fffaf1] p-4 shadow-xl">
+        <div class="mb-4"><h2 class="text-sm font-semibold uppercase tracking-widest text-[#6f3f24]">Plot tools</h2><div id="plotToolbar" class="mt-2 flex flex-wrap gap-1" role="toolbar" aria-label="Plot controls"><button data-action="pan" title="Pan" aria-label="Pan" class="plot-tool">↔</button><button data-action="autoscale" title="Autoscale" aria-label="Autoscale" class="plot-tool">⤢</button><button data-action="download" title="Download plot image" aria-label="Download plot image" class="plot-tool">⇩</button></div></div>
         <div class="space-y-4">
           <label class="block"><span class="text-sm font-medium text-slate-700">Color UMAP by</span>
             <select id="colorBy" class="mt-1 w-full rounded-lg border border-[#cbbda9] bg-white px-3 py-2 text-slate-900"><option value="cluster">Cluster</option><option value="n_genes">Detected genes per cell</option><option value="pct_mito">Mitochondrial reads (%)</option><option value="gene">Gene expression</option></select>
@@ -172,14 +178,16 @@ HTML_PAGE = r'''<!doctype html>
             <p id="geneStatus" class="mt-1 text-xs text-slate-600"></p>
           </label>
           <div><span class="text-sm text-slate-700">Quick-select clusters</span><div class="mt-1 flex gap-2"><button class="quick rounded-lg border border-slate-700 px-3 py-1 text-sm" data-cluster="4">Cluster 4</button><button class="quick rounded-lg border border-slate-700 px-3 py-1 text-sm" data-cluster="7">Cluster 7</button></div></div>
-          <label class="block"><span class="text-sm text-slate-300">Selected cluster</span>
+          <label class="block"><span class="text-sm text-slate-700">Selected cluster</span>
             <select id="cluster" class="mt-1 w-full rounded-lg border border-[#cbbda9] bg-white px-3 py-2 text-slate-900"></select>
           </label>
           <div id="quality" class="rounded-lg bg-[#eee5d6] p-3 text-sm text-slate-700">Loading selected-cluster QC…</div>
         </div>
       </aside>
-      <section class="min-w-0 space-y-4">
-        <div id="plot" class="h-[62vh] min-h-[28rem] rounded-2xl border border-[#d8cdbd] bg-[#fffaf1]"></div>
+      <section class="min-w-0">
+        <div class="relative h-[62vh] min-h-[28rem] rounded-2xl border border-[#d8cdbd] bg-[#fffaf1]"><div id="plot" class="h-full w-full"></div></div>
+      </section>
+      <section class="col-span-full min-w-0 space-y-4">
         <div class="overflow-hidden rounded-2xl border border-[#d8cdbd] bg-[#fffaf1] text-slate-800">
           <div class="border-b border-[#e5dacb] px-4 py-3"><h2 class="font-semibold">Top markers</h2></div>
           <div class="overflow-x-auto bg-[#fffaf1]"><table class="w-full text-left text-sm text-slate-800"><thead class="bg-[#e8dccb] text-slate-900"><tr><th class="px-4 py-2">Gene</th><th class="px-4 py-2">Score</th><th class="px-4 py-2">Log fold change</th><th class="px-4 py-2">Adjusted p-value</th></tr></thead><tbody id="markers"></tbody></table></div>
@@ -223,14 +231,28 @@ function draw() {
   const mode = activeView;
   $('colorBy').value = mode === 'gene' ? 'gene' : mode;
   $('geneControl').classList.toggle('hidden', mode !== 'gene');
-  const labels = {cluster:'Cluster', n_genes:'Detected genes per cell', pct_mito:'Mitochondrial reads (%)', gene:'Gene expression'};
+  const labels = {cluster:'Cluster', n_genes:'Gene count<br>per cell', pct_mito:'Mitochondrial<br>reads (%)', gene:'Gene expression'};
   if (mode === 'cluster') {
-    const traces = [...new Set(umapData.map(d => d.cluster))].sort((a,b)=>+a-+b).map((c,i) => { const z=umapData.filter(d=>d.cluster===c); return {x:z.map(d=>d.x),y:z.map(d=>d.y),mode:'markers',type:'scattergl',name:`Cluster ${c}`,text:z.map(d=>`${d.cell_id}<br>Detected genes: ${d.n_genes}<br>Mitochondrial percentage: ${d.pct_mito.toFixed(2)}%`),hoverinfo:'text',marker:{color:palette[i%palette.length],size:6,opacity:.8}}; }); Plotly.newPlot('plot',traces,layout('UMAP — coloured by Cluster'),{responsive:true,displaylogo:false,modeBar:{orientation:'h',y:-0.16,x:1,xanchor:'right',yanchor:'top'}});
-  } else { const vals=umapData.map(d=>d[mode]); Plotly.newPlot('plot',[{x:umapData.map(d=>d.x),y:umapData.map(d=>d.y),mode:'markers',type:'scattergl',text:umapData.map(d=>d.cell_id),hoverinfo:'text',marker:{color:vals,colorscale:'Viridis',size:6,colorbar:{title:labels[mode]}}}],layout(`UMAP — coloured by ${labels[mode]}`),{responsive:true,displaylogo:false,modeBar:{orientation:'h',y:-0.16,x:1,xanchor:'right',yanchor:'top'}}); }
+    const traces = [...new Set(umapData.map(d => d.cluster))].sort((a,b)=>+a-+b).map((c,i) => { const z=umapData.filter(d=>d.cluster===c); return {x:z.map(d=>d.x),y:z.map(d=>d.y),mode:'markers',type:'scattergl',name:`Cluster ${c}`,text:z.map(d=>`${d.cell_id}<br>Detected genes: ${d.n_genes}<br>Mitochondrial percentage: ${d.pct_mito.toFixed(2)}%`),hoverinfo:'text',marker:{color:palette[i%palette.length],size:6,opacity:.8}}; }); Plotly.newPlot('plot',traces,layout('UMAP — coloured by Cluster'),{responsive:true,displaylogo:false,displayModeBar:false,scrollZoom:true});
+  } else { const vals=umapData.map(d=>d[mode]); Plotly.newPlot('plot',[{x:umapData.map(d=>d.x),y:umapData.map(d=>d.y),mode:'markers',type:'scattergl',text:umapData.map(d=>d.cell_id),hoverinfo:'text',marker:{color:vals,colorscale:'Viridis',size:6,colorbar:{title:{text:labels[mode],side:'top'},titlefont:{size:12},tickfont:{size:10}}}}],layout(`UMAP — coloured by ${labels[mode]}`),{responsive:true,displaylogo:false,displayModeBar:false,scrollZoom:true}); }
 }
-function layout(title) { return {title:{text:title,font:{color:'#1f2937'}},paper_bgcolor:'#fffaf1',plot_bgcolor:'#fffaf1',font:{color:'#475569'},margin:{l:55,r:95,t:55,b:60},xaxis:{title:'UMAP 1',gridcolor:'#e5dacb'},yaxis:{title:'UMAP 2',gridcolor:'#e5dacb'},legend:{bgcolor:'#fffaf1',font:{color:'#334155'}}}; }
-async function plotGene() { const gene=$('gene').value.trim(); if(!gene)return; $('geneStatus').textContent = `Loading ${gene} expression…`; const r=await fetch(`/api/genes/${encodeURIComponent(gene)}`); if(!r.ok){$('geneStatus').textContent = `Gene not found: ${gene}`; return;} const data=await r.json(); const values=data.values; const byId=new Map(values.map(d=>[d.cell_id,d.expression])); activeView = 'gene'; $('colorBy').value = 'gene'; $('geneControl').classList.remove('hidden'); $('geneStatus').textContent = `Active colouring: ${data.gene} expression (log-normalized adata.X).`; Plotly.newPlot('plot',[{x:umapData.map(d=>d.x),y:umapData.map(d=>d.y),mode:'markers',type:'scattergl',text:umapData.map(d=>d.cell_id),hoverinfo:'text',marker:{color:umapData.map(d=>byId.get(d.cell_id)),colorscale:'Viridis',size:6,colorbar:{title:`${data.gene} expression`}}}],layout(`UMAP — coloured by Gene expression (${data.gene})`),{responsive:true,displaylogo:false,modeBar:{orientation:'h',y:-0.16,x:1,xanchor:'right',yanchor:'top'}}); }
+function layout(title) { return {title:{text:title,font:{color:'#1f2937'}},paper_bgcolor:'#fffaf1',plot_bgcolor:'#fffaf1',font:{color:'#475569'},margin:{l:55,r:95,t:55,b:60},xaxis:{title:'UMAP 1',gridcolor:'#e5dacb'},yaxis:{title:'UMAP 2',gridcolor:'#e5dacb'},legend:{bgcolor:'#fffaf1',font:{color:'#334155'},orientation:'v',x:1.02,xanchor:'left',y:1,yanchor:'top'}}; }
+async function plotGene() { const gene=$('gene').value.trim(); if(!gene)return; $('geneStatus').textContent = `Loading ${gene} expression…`; const r=await fetch(`/api/genes/${encodeURIComponent(gene)}`); if(!r.ok){$('geneStatus').textContent = `Gene not found: ${gene}`; return;} const data=await r.json(); const values=data.values; const byId=new Map(values.map(d=>[d.cell_id,d.expression])); activeView = 'gene'; $('colorBy').value = 'gene'; $('geneControl').classList.remove('hidden'); $('geneStatus').textContent = `Active colouring: ${data.gene} expression (log-normalized adata.X).`; Plotly.newPlot('plot',[{x:umapData.map(d=>d.x),y:umapData.map(d=>d.y),mode:'markers',type:'scattergl',text:umapData.map(d=>d.cell_id),hoverinfo:'text',marker:{color:umapData.map(d=>byId.get(d.cell_id)),colorscale:'Viridis',size:6,colorbar:{title:{text:`${data.gene}<br>expression`,side:'top'},titlefont:{size:12},tickfont:{size:10}}}}],layout(`UMAP — coloured by Gene expression (${data.gene})`),{responsive:true,displaylogo:false,displayModeBar:false,scrollZoom:true}); }
 async function loadMarkers() { const c=$('cluster').value; if(c===undefined)return; $('quality').textContent = `Loading Cluster ${c} QC…`; const d=await (await fetch(`/api/clusters/${c}/markers?n_genes=15`)).json(); $('quality').innerHTML=`<b>Cluster ${c}</b><br>Cell count: ${d.n_cells}<br>Median detected genes/cell: ${d.quality.n_genes_median.toFixed(0)} (range ${d.quality.n_genes_range.join('–')})<br>Median mitochondrial percentage: ${d.quality.pct_mito_median.toFixed(2)}% (range ${d.quality.pct_mito_range.map(x=>x.toFixed(2)).join('–')}%)`; $('markers').innerHTML=d.markers.map(m=>`<tr class="border-t border-[#e5dacb] bg-[#fffaf1] text-slate-800"><td class="px-4 py-2 font-medium">${m.gene}</td><td class="px-4 py-2">${m.score.toFixed(2)}</td><td class="px-4 py-2">${m.logfoldchange.toFixed(2)}</td><td class="px-4 py-2">${m.pval_adj.toExponential(2)}</td></tr>`).join(''); }
+function wirePlotToolbar() {
+  document.querySelectorAll('#plotToolbar [data-action]').forEach(button => button.addEventListener('click', () => {
+    const action = button.dataset.action;
+    const plot = $('plot');
+    if (action === 'pan') {
+      const isActive = button.classList.contains('active');
+      button.classList.toggle('active', !isActive);
+      Plotly.relayout(plot, {'dragmode': isActive ? 'zoom' : 'pan'});
+    }
+    if (action === 'autoscale') Plotly.relayout(plot, {'xaxis.autorange': true, 'yaxis.autorange': true});
+    if (action === 'download') Plotly.downloadImage(plot, {format:'png', filename:'pbmc-umap', height:900, width:1400});
+  }));
+}
+wirePlotToolbar();
 load();
 </script>
 </body></html>'''
