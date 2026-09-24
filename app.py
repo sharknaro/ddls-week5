@@ -184,7 +184,8 @@ HTML_PAGE = r'''<!doctype html>
             <select id="cluster" class="mt-1 w-full rounded-lg border border-[#cbbda9] bg-white px-3 py-2 text-slate-900"></select>
           </label>
           <div id="quality" class="rounded-lg bg-[#eee5d6] p-3 text-sm text-slate-700">Loading selected-cluster QC…</div>
-        </div>
+
+          <div class="rounded-lg border border-[#d8cdbd] bg-[#eee5d6] p-3"><h2 class="text-xs font-semibold uppercase tracking-widest text-[#6f3f24]">Evidence shortcuts</h2><div class="mt-2 flex flex-wrap gap-1"><button class="evidence-shortcut rounded border border-[#cbbda9] bg-[#fffaf1] px-2 py-1 text-xs" data-gene="LST1">LST1</button><button class="evidence-shortcut rounded border border-[#cbbda9] bg-[#fffaf1] px-2 py-1 text-xs" data-gene="FCER1G">FCER1G</button><button class="evidence-shortcut rounded border border-[#cbbda9] bg-[#fffaf1] px-2 py-1 text-xs" data-gene="FCGR3A">FCGR3A</button><button class="evidence-shortcut rounded border border-[#cbbda9] bg-[#fffaf1] px-2 py-1 text-xs" data-gene="AIF1">AIF1</button><button class="evidence-shortcut rounded border border-[#cbbda9] bg-[#fffaf1] px-2 py-1 text-xs" data-mode="pct_mito">Mito %</button><button class="evidence-shortcut rounded border border-[#cbbda9] bg-[#fffaf1] px-2 py-1 text-xs" data-mode="n_genes">Gene count</button></div></div>        </div>
       </aside>
       <section class="min-w-0">
         <div class="relative h-[62vh] min-h-[28rem] rounded-2xl border border-[#d8cdbd] bg-[#fffaf1]"><div id="plot" class="h-full w-full"></div></div>
@@ -222,6 +223,7 @@ async function load() {
     $('geneControl').classList.add('hidden');
     $('colorBy').addEventListener('change', () => { activeView = $('colorBy').value; $('geneControl').classList.toggle('hidden', activeView !== 'gene'); if (activeView !== 'gene') draw(); });
     $('geneBtn').addEventListener('click', plotGene);
+    document.querySelectorAll('.evidence-shortcut').forEach(button => button.addEventListener('click', () => { if (button.dataset.gene) { $('gene').value = button.dataset.gene; plotGene(); } else { activeView = button.dataset.mode; draw(); } }));
     $('cluster').addEventListener('change', loadMarkers);
     await loadOverview(); draw(); await loadMarkers();
   } catch (error) { $('plot').innerHTML = `<div class="flex h-full items-center justify-center p-6 text-center text-red-300">Could not load the UMAP. ${error.message}</div>`; }
