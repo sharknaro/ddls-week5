@@ -238,6 +238,8 @@ function draw() {
   const mode = activeView;
   $('colorBy').value = mode === 'gene' ? 'gene' : mode;
   $('geneControl').classList.toggle('hidden', mode !== 'gene');
+  const canMark = mode === 'n_genes' || mode === 'pct_mito';
+  $('markCluster').classList.toggle('hidden', !canMark);
   const canIsolate = mode === 'n_genes' || mode === 'pct_mito';
   const labels = {cluster:'Cluster', n_genes:'Gene count<br>per cell', pct_mito:'Mitochondrial<br>reads (%)', gene:'Gene expression'};
   if (mode === 'cluster') {
